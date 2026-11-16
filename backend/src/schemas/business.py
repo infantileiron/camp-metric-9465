@@ -38,3 +38,33 @@ class RunInput(BaseModel):
   if self.date_from>self.date_to:raise ValueError('开始日不得晚于结束日')
   return self
 class NoteInput(BaseModel):note:str=Field(min_length=8,max_length=2000)
+
+class ReconcileInterval(BaseModel):
+ date_from:date
+ date_to:date
+ total:int=Field(ge=0,le=100000000)
+ label:str=Field(default='',max_length=100)
+ @model_validator(mode='after')
+ def window(self):
+  if self.date_from>self.date_to:raise ValueError('区间开始日不得晚于结束日')
+  return self
+
+class ReconcileInput(BaseModel):
+ class_code:str=Field(min_length=1,max_length=50)
+ date_from:date
+ date_to:date
+ intervals:list[ReconcileInterval]=Field(min_length=1,max_length=200)
+ verified:dict[str,int]=Field(default_factory=dict)
+ @model_validator(mode='after')
+ def span(self):
+  if self.date_from>self.date_to:raise ValueError('开始日不得晚于结束日')
+  if (self.date_to-self.date_from).days>30:raise ValueError('对账窗口最多31日')
+  start,end=self.date_from.isoformat(),self.date_to.isoformat()
+  for iv in self.intervals:
+   if iv.date_from.isoformat()<start or iv.date_to.isoformat()>end:raise ValueError('区间必须落在对账窗口内')
+  for day,value in self.verified.items():
+   try:d=date.fromisoformat(day)
+   except ValueError:raise ValueError('核实日期格式应为 YYYY-MM-DD')
+   if d<self.date_from or d>self.date_to:raise ValueError('核实日期必须落在对账窗口内')
+   if value<0 or value>1000000:raise ValueError('核实退款人次需在0到1000000之间')
+  return self

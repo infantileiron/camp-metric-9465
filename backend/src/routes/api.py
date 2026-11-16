@@ -2,12 +2,13 @@ import os,json
 import redis
 from fastapi import APIRouter,Depends,HTTPException,Response
 from src.config.database import db
-from src.models.entities import User,Metric,Fact,Snapshot,Audit
-from src.schemas.business import Login,MetricInput,FactInput,RunInput,NoteInput
+from src.models.entities import User,Metric,Fact,Snapshot,Audit,Reconciliation
+from src.schemas.business import Login,MetricInput,FactInput,RunInput,NoteInput,ReconcileInput
 from src.middlewares.auth import current,editor,admin
 from src.utils.security import verify,token
 from src.services.business import audit,dump
 from src.services.repository import save_metric,save_fact
+from src.services import reconciliation as recon
 from src.controllers import business as ensure
 router=APIRouter()
 @router.post('/auth/login')
@@ -72,3 +73,29 @@ def export(i:int,u=Depends(current),s=Depends(db)):
  return Response(json.dumps(dump(r),ensure_ascii=False,indent=2),media_type='application/json',headers={'Content-Disposition':f'attachment; filename="camp-metric-{i}.json"'})
 @router.get('/audits')
 def audits(u=Depends(admin),s=Depends(db)):return [dump(r) for r in s.query(Audit).order_by(Audit.id.desc()).limit(100)]
+
+def _recon(s,i):
+ r=s.get(Reconciliation,i)
+ if not r:raise HTTPException(404,'退款对账不存在')
+ return r
+@router.get('/reconciliations')
+def reconciliations(u=Depends(current),s=Depends(db)):return [dump(r) for r in s.query(Reconciliation).order_by(Reconciliation.id.desc()).all()]
+@router.post('/reconciliations')
+def create_reconciliation(data:ReconcileInput,u=Depends(editor),s=Depends(db)):
+ return dump(recon.create(s,data,u))
+@router.put('/reconciliations/{i}')
+def edit_reconciliation(i:int,data:ReconcileInput,u=Depends(editor),s=Depends(db)):
+ return dump(recon.update(s,_recon(s,i),data,u))
+@router.get('/reconciliations/{i}')
+def reconciliation(i:int,u=Depends(current),s=Depends(db)):return dump(_recon(s,i))
+@router.post('/reconciliations/{i}/analyze')
+def analyze_reconciliation(i:int,u=Depends(editor),s=Depends(db)):
+ return dump(recon.analyze(s,_recon(s,i),u))
+@router.post('/reconciliations/{i}/apply')
+def apply_reconciliation(i:int,u=Depends(admin),s=Depends(db)):
+ r,changed=recon.apply(s,_recon(s,i),u)
+ return {**dump(r),'changed':changed}
+@router.get('/reconciliations/{i}/export')
+def export_reconciliation(i:int,u=Depends(current),s=Depends(db)):
+ r=_recon(s,i)
+ return Response(json.dumps(recon.export(r),ensure_ascii=False,indent=2),media_type='application/json',headers={'Content-Disposition':f'attachment; filename="refund-reconciliation-{i}.json"'})
