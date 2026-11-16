@@ -1,0 +1,5 @@
+ROLES=('admin','analyst','viewer')
+STATES=('queued','running','done','failed')
+MODES=('全部','线上','线下')
+APPROVALS=('draft','approved')
+FIELDS=('enrolled','attended','completed','refunds')

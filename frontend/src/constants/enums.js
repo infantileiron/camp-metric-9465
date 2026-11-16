@@ -1,0 +1,1 @@
+export const MODES=['全部','线上','线下'];export const ROLES=['admin','analyst','viewer'];export const STATES=['queued','running','done','failed'];export const APPROVALS=['draft','approved'];export const FIELDS=['enrolled','attended','completed','refunds'];
